@@ -20,17 +20,62 @@ interface VideoCarouselProps {
 export function VideoCarousel({ videos }: VideoCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [direction, setDirection] = useState(1);
+  const [blobUrls, setBlobUrls] = useState<Map<string, string>>(new Map());
+  const [loadingVideos, setLoadingVideos] = useState<Set<string>>(new Set());
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
 
-  // Preload next video
-  useEffect(() => {
-    const nextIndex = (currentIndex + 1) % videos.length;
-    const nextVideo = videoRefs.current[nextIndex];
-
-    if (nextVideo) {
-      nextVideo.load();
+  // Function to fetch video as blob
+  const fetchVideoAsBlob = async (videoUrl: string, videoId: string) => {
+    if (blobUrls.has(videoId) || loadingVideos.has(videoId)) {
+      return;
     }
-  }, [currentIndex, videos.length]);
+
+    setLoadingVideos((prev) => new Set(prev).add(videoId));
+
+    try {
+      const response = await fetch(videoUrl);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+
+      setBlobUrls((prev) => new Map(prev).set(videoId, blobUrl));
+      setLoadingVideos((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(videoId);
+        return newSet;
+      });
+    } catch (error) {
+      console.error(`Failed to fetch video ${videoId}:`, error);
+      setLoadingVideos((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(videoId);
+        return newSet;
+      });
+    }
+  };
+
+  // Load current and next video as blobs
+  useEffect(() => {
+    if (videos.length === 0) return;
+
+    const currentVideo = videos[currentIndex];
+    const nextIndex = (currentIndex + 1) % videos.length;
+    const nextVideo = videos[nextIndex];
+
+    // Fetch current video
+    fetchVideoAsBlob(currentVideo.videoUrl, currentVideo._id);
+
+    // Preload next video
+    fetchVideoAsBlob(nextVideo.videoUrl, nextVideo._id);
+  }, [currentIndex, videos]);
+
+  // Cleanup blob URLs on unmount
+  useEffect(() => {
+    return () => {
+      blobUrls.forEach((blobUrl) => {
+        URL.revokeObjectURL(blobUrl);
+      });
+    };
+  }, []);
 
   // Handle video end
   const handleVideoEnd = () => {
@@ -38,16 +83,17 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
     setCurrentIndex((prev) => (prev + 1) % videos.length);
   };
 
-  // Auto-play current video
+  // Auto-play current video when blob is ready
   useEffect(() => {
     const currentVideo = videoRefs.current[currentIndex];
+    const currentVideoId = videos[currentIndex]?._id;
 
-    if (currentVideo) {
+    if (currentVideo && blobUrls.has(currentVideoId)) {
       currentVideo.play().catch((error) => {
         console.log("[v0] Video autoplay failed:", error);
       });
     }
-  }, [currentIndex]);
+  }, [currentIndex, blobUrls, videos]);
 
   const variants = {
     enter: {
@@ -64,45 +110,66 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
     },
   };
 
+  if (videos.length === 0) {
+    return (
+      <div className="w-full h-full flex items-center justify-center">
+        No videos available
+      </div>
+    );
+  }
+
+  const currentBlobUrl = blobUrls.get(videos[currentIndex]._id);
+
   return (
     <div className="relative w-full h-full overflow-hidden">
-      <AnimatePresence initial={false} custom={direction}>
-        <motion.div
-          key={currentIndex}
-          custom={direction}
-          variants={variants}
-          initial="enter"
-          animate="center"
-          exit="exit"
-          transition={{
-            y: { type: "spring", stiffness: 300, damping: 30 },
-            opacity: { duration: 0.7 },
-          }}
-          className="absolute inset-0">
-          <video
-            ref={(el) => {
-              videoRefs.current[currentIndex] = el;
+      {!currentBlobUrl && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-white">
+          Loading video...
+        </div>
+      )}
+
+      {currentBlobUrl && (
+        <AnimatePresence initial={false} custom={direction}>
+          <motion.div
+            key={currentIndex}
+            custom={direction}
+            variants={variants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{
+              y: { type: "spring", stiffness: 300, damping: 30 },
+              opacity: { duration: 0.7 },
             }}
-            src={videos[currentIndex].videoUrl}
-            className="w-full h-full object-cover"
-            playsInline
-            muted
-            onEnded={handleVideoEnd}
-            preload="auto"
-          />
-        </motion.div>
-      </AnimatePresence>
+            className="absolute inset-0">
+            <video
+              ref={(el) => {
+                videoRefs.current[currentIndex] = el;
+              }}
+              src={currentBlobUrl}
+              className="w-full h-full object-cover"
+              playsInline
+              muted
+              onEnded={handleVideoEnd}
+              preload="auto"
+            />
+          </motion.div>
+        </AnimatePresence>
+      )}
 
       {/* Preload next video (hidden) */}
       {videos.map((video, index) => {
         if (index === currentIndex) return null;
+        const videoBlobUrl = blobUrls.get(video._id);
+        if (!videoBlobUrl) return null;
+
         return (
           <video
             key={video._id}
             ref={(el) => {
               videoRefs.current[index] = el;
             }}
-            src={video.videoUrl}
+            src={videoBlobUrl}
             className="hidden"
             playsInline
             muted
