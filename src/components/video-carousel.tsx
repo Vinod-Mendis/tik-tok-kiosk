@@ -23,6 +23,7 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
   const [blobUrls, setBlobUrls] = useState<Map<string, string>>(new Map());
   const [loadingVideos, setLoadingVideos] = useState<Set<string>>(new Set());
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
+  const prevVideosLengthRef = useRef(videos.length);
 
   // Function to fetch video as blob
   const fetchVideoAsBlob = async (videoUrl: string, videoId: string) => {
@@ -62,11 +63,32 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
     const nextVideo = videos[nextIndex];
 
     // Fetch current video
-    fetchVideoAsBlob(currentVideo.videoUrl, currentVideo._id);
+    if (currentVideo) {
+      fetchVideoAsBlob(currentVideo.videoUrl, currentVideo._id);
+    }
 
     // Preload next video
-    fetchVideoAsBlob(nextVideo.videoUrl, nextVideo._id);
+    if (nextVideo) {
+      fetchVideoAsBlob(nextVideo.videoUrl, nextVideo._id);
+    }
   }, [currentIndex, videos]);
+
+  // Preload new videos when they're added to the list
+  useEffect(() => {
+    if (videos.length > prevVideosLengthRef.current) {
+      // New videos were added
+      const newVideos = videos.slice(prevVideosLengthRef.current);
+
+      console.log(`Preloading ${newVideos.length} new videos in background`);
+
+      // Preload new videos in the background without blocking
+      newVideos.forEach((video) => {
+        fetchVideoAsBlob(video.videoUrl, video._id);
+      });
+    }
+
+    prevVideosLengthRef.current = videos.length;
+  }, [videos.length]);
 
   // Cleanup blob URLs on unmount
   useEffect(() => {
@@ -112,7 +134,7 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
 
   if (videos.length === 0) {
     return (
-      <div className="w-full h-full flex items-center justify-center">
+      <div className="w-full h-full flex items-center justify-center text-white">
         No videos available
       </div>
     );
