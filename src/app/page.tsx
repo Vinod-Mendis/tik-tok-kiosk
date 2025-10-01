@@ -89,7 +89,7 @@ export default function MyComponent() {
   if (error) return <div>Error: {error}</div>;
 
   return (
-    <main className="min-h-screen w-full flex items-center justify-center bg-background overflow-hidden relative bg-black">
+    <main className="min-h-screen w-full flex items-center justify-center bg-background overflow-hidden relative bg-gray-800 px-[94px]">
       <div className="w-full h-full absolute">
         <img
           src="/images/background.png"
@@ -99,7 +99,7 @@ export default function MyComponent() {
       </div>
 
       {/* 9:16 aspect ratio container centered on screen */}
-      <div className="relative translate-y-[118px] aspect-[9/16] w-[190px] rounded-lg overflow-hidden shadow-2xl">
+      <div className="relative translate-y-[310px] aspect-[9/16] w-full rounded-lg overflow-hidden shadow-2xl">
         <VideoCarousel videos={currentVideos} />
       </div>
     </main>
