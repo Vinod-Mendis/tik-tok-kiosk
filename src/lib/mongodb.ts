@@ -1,6 +1,6 @@
 /** @format */
 
-import { MongoClient, Db } from "mongodb";
+import { MongoClient} from "mongodb";
 
 const uri = process.env.MONGODB_URI as string;
 const options = {};
